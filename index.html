@@ -1,0 +1,628 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>월루해서 회장까지</title>
+<style>
+* {box-sizing:border-box}
+body {
+  margin:0;padding:20px;background:#eee;
+  color:#111;font-family:"Malgun Gothic",sans-serif;
+}
+.app {
+  max-width:1100px;margin:auto;background:white;
+  border:3px solid #111;
+}
+header {
+  background:#111;color:white;padding:17px;
+  display:flex;justify-content:space-between;gap:10px;
+}
+.layout {
+  display:grid;grid-template-columns:1.5fr 1fr;
+  gap:16px;padding:16px;
+}
+.box {border:2px solid #111;padding:14px;margin-bottom:14px}
+h2 {font-size:17px;margin:0 0 14px}
+.stats {
+  display:flex;flex-wrap:wrap;gap:8px;
+  margin-bottom:14px;font-size:13px;
+}
+.stats span {border:1px solid #999;padding:7px}
+.bar {height:15px;border:2px solid #111;margin:5px 0 15px}
+.fill {height:100%;background:#222}
+.line {display:flex;justify-content:space-between;font-size:13px}
+.buttons {display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button {
+  cursor:pointer;border:2px solid #111;
+  background:white;padding:11px;font-weight:bold;
+  color:#111;font-family:inherit;
+}
+button:hover {background:#222;color:white}
+button:disabled {opacity:.35;cursor:not-allowed}
+.result {border:3px solid #111;padding:15px;margin-bottom:14px}
+.result strong {display:block;margin-bottom:7px}
+.result p {margin:0;line-height:1.5;font-size:14px}
+.messenger {
+  border:2px solid #111;height:650px;
+  display:flex;flex-direction:column;
+  position:sticky;top:15px;min-width:0;
+}
+.mhead {
+  background:#111;color:white;padding:14px;
+  display:flex;justify-content:space-between;
+}
+.messages {overflow-y:auto;flex:1;padding:10px}
+.message {
+  border:1px solid #aaa;padding:12px;
+  margin-bottom:9px;font-size:13px;
+}
+.message.new {border:2px solid #111;background:#eee}
+.message small {display:block;color:#666;margin-bottom:7px}
+.message p {line-height:1.5;margin:7px 0}
+.message button {width:100%;font-size:12px}
+.mfoot {border-top:1px solid #aaa;padding:10px;font-size:12px}
+.modal {
+  display:none;position:fixed;inset:0;
+  background:#0009;align-items:center;
+  justify-content:center;padding:15px;z-index:10;
+}
+.modal.show {display:flex}
+.dialog {
+  width:min(480px,100%);background:white;
+  border:3px solid #111;padding:24px;
+  box-shadow:7px 7px 0 #444;
+}
+.dialog p {white-space:pre-line;line-height:1.7}
+.dialog button {width:100%;margin-top:8px}
+.muted {font-size:12px;color:#666}
+@media(max-width:720px) {
+  .layout {grid-template-columns:1fr}
+  .messenger {position:static;height:400px}
+  body {padding:7px}
+}
+</style>
+</head>
+
+<body>
+<div class="app">
+<header>
+  <b>▣ 월루해서 회장까지.exe</b>
+  <small>OFFICE IDLE GAME</small>
+</header>
+
+<div class="layout">
+<div>
+  <div class="stats">
+    <span id="rank"></span>
+    <span id="day"></span>
+    <span id="money"></span>
+  </div>
+
+  <div class="result" aria-live="polite">
+    <strong id="resultTitle">첫 출근</strong>
+    <p id="resultText">오늘도 출근했습니다.</p>
+  </div>
+
+  <div class="box">
+    <div class="line"><b>체력</b><span id="hpText"></span></div>
+    <div class="bar"><div class="fill" id="hpBar"></div></div>
+    <div class="line"><b>평판</b><span id="repText"></span></div>
+    <div class="bar"><div class="fill" id="repBar"></div></div>
+    <div class="line"><b>실적</b><span id="workText"></span></div>
+    <div class="bar"><div class="fill" id="workBar"></div></div>
+  </div>
+
+  <div class="box">
+    <h2>월루하기</h2>
+    <div class="buttons" id="actionButtons">
+      <button onclick="wolru('sleep')">몰래 자기</button>
+      <button onclick="wolru('reels')">릴스 보기</button>
+      <button onclick="wolru('coffee')">탕비실 가기</button>
+      <button onclick="wolru('toilet')">화장실 피신</button>
+    </div>
+    <p class="muted" id="cooldown"></p>
+  </div>
+
+  <div class="box">
+    <h2>승진 심사</h2>
+    <p id="promotionInfo"></p>
+    <button id="promotionButton" onclick="promote()">승진 도전</button>
+  </div>
+
+  <div class="box">
+    <button onclick="collection()">엔딩 도감</button>
+    <button onclick="restart()">새 인생 시작</button>
+  </div>
+</div>
+
+<aside class="messenger">
+  <div class="mhead">
+    <b>▤ 사내 메신저</b>
+    <span id="pendingCount">0</span>
+  </div>
+  <div class="messages" id="messages"></div>
+  <div class="mfoot">사내 알림 · 최신순</div>
+</aside>
+</div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="dialog">
+    <small id="modalType">사내 알림</small>
+    <h2 id="modalTitle"></h2>
+    <p id="modalBody"></p>
+    <div id="modalButtons"></div>
+  </div>
+</div>
+
+<script>
+const KEY = "office_idle_game_v05";
+const RANKS = [
+  "인턴","사원","주임","대리","과장",
+  "차장","부장","임원","사장","회장"
+];
+
+const ENDINGS = {
+  chairman: ["월루의 신",
+    "당신은 마침내 회장이 되었습니다.\n드디어 아무것도 하지 않아도 됩니다."],
+  dead: ["과로의 끝",
+    "체력이 바닥났습니다.\n평생 일하지 않으려던 꿈은 이루지 못했습니다."],
+  beggar: ["거리의 자유인",
+    "평판이 바닥나 해고되었습니다.\n이제 출근할 회사가 없습니다."],
+  scout: ["샘송전자의 노예",
+    "샘송전자로 스카우트되었습니다.\n연봉은 올랐지만 퇴근이 사라졌습니다."],
+  influencer: ["전업 인플루언서",
+    "회사에서 몰래 올린 영상이 대박 났습니다.\n이제 매일 영상을 편집해야 합니다."]
+};
+
+const EVENTS = [
+  {
+    title:"친구가 릴스를 보냈습니다",
+    body:"야 이거 개웃김ㅋㅋㅋ\n지금 확인하시겠습니까?",
+    choices:[
+      {text:"지금 확인한다",results:[
+        {p:55,msg:"웃음을 꾹 참았습니다.",hp:7,sns:1},
+        {p:35,msg:"사무실 전체에 소리가 울려 퍼졌습니다!",rep:-50,sns:1},
+        {p:10,msg:"대표가 같이 보더니 팔로우했습니다.",rep:25,sns:2}
+      ]},
+      {text:"퇴근하고 본다",results:[
+        {p:100,msg:"친구가 읽씹이라고 화를 냅니다."}
+      ]}
+    ]
+  },
+  {
+    title:"오늘 회식이 있습니다",
+    body:"팀장: 오늘 회식! 다 오는 거지?",
+    choices:[
+      {text:"참석한다",results:[
+        {p:55,msg:"상사들과 친해졌습니다.",rep:18,hp:-18},
+        {p:25,msg:"대표가 당신을 마음에 들어 합니다.",rep:32,hp:-20},
+        {p:20,msg:"취해서 대표에게 반말했습니다.",rep:-40,hp:-23}
+      ]},
+      {text:"불참한다",results:[
+        {p:65,msg:"집에서 푹 쉬었습니다.",hp:14},
+        {p:35,msg:"팀장이 다음 날 눈치를 줍니다.",rep:-17,hp:8}
+      ]}
+    ]
+  },
+  {
+    title:"거래처에서 전화가 왔습니다",
+    body:"중요한 거래처에서 급하게 견적을 요청합니다.",
+    choices:[
+      {text:"직접 처리한다",results:[
+        {p:50,msg:"계약 성공! 실적 +34",work:34,hp:-19},
+        {p:35,msg:"견적 오류가 발생했습니다.",work:-12,hp:-24},
+        {p:15,msg:"거래처가 당신을 칭찬했습니다.",work:48,rep:12}
+      ]},
+      {text:"동료에게 넘긴다",results:[
+        {p:65,msg:"동료가 대신 해결했습니다.",hp:5},
+        {p:35,msg:"동료가 팀장에게 불만을 제기했습니다.",rep:-23}
+      ]}
+    ]
+  },
+  {
+    title:"보고서 마감 10분 전",
+    body:"팀장이 지금 당장 보고서를 달라고 합니다.",
+    choices:[
+      {text:"집중해서 마무리한다",results:[
+        {p:55,msg:"보고서가 채택됐습니다!",work:30,hp:-22},
+        {p:45,msg:"숫자를 잘못 적었습니다.",work:-15,rep:-12,hp:-12}
+      ]},
+      {text:"AI에게 맡긴다",results:[
+        {p:60,msg:"완벽한 초안이 나왔습니다.",work:25},
+        {p:40,msg:"존재하지 않는 매출이 적혀 있었습니다.",rep:-30,work:-10}
+      ]}
+    ]
+  },
+  {
+    title:"대표가 아이디어를 모집합니다",
+    body:"이번 분기 실적을 올릴 아이디어를 모집합니다.",
+    choices:[
+      {text:"아이디어를 발표한다",results:[
+        {p:35,msg:"아이디어가 채택됐습니다!",work:42,rep:15},
+        {p:45,msg:"아무도 반응하지 않았습니다.",hp:-8},
+        {p:20,msg:"대표가 직접 해보라고 시켰습니다.",hp:-25}
+      ]},
+      {text:"조용히 있는다",results:[
+        {p:100,msg:"무사히 넘어갔습니다."}
+      ]}
+    ]
+  },
+  {
+    title:"공용 폴더에서 제안서를 발견했습니다",
+    body:"동료가 완성해 놓은 제안서가 있습니다.",
+    choices:[
+      {text:"내 이름으로 제출한다",results:[
+        {p:45,msg:"아무도 몰랐습니다.",work:35},
+        {p:55,msg:"원작자가 나타났습니다!",rep:-45,work:-15}
+      ]},
+      {text:"함께 제출한다",results:[
+        {p:75,msg:"팀워크를 인정받았습니다.",work:17,rep:12},
+        {p:25,msg:"동료가 혼자 제출했습니다."}
+      ]}
+    ]
+  },
+  {
+    title:"대표와 엘리베이터에 단둘이!",
+    body:"대표: 요즘 회사 생활은 어떤가?",
+    choices:[
+      {text:"너무 좋습니다!",results:[
+        {p:60,msg:"대표가 흐뭇해합니다.",rep:20},
+        {p:40,msg:"대표: 그럼 야근도 좋겠군.",hp:-25,work:12}
+      ]},
+      {text:"솔직하게 말한다",results:[
+        {p:45,msg:"대표가 솔직함을 좋아합니다.",rep:30},
+        {p:55,msg:"대표의 표정이 굳었습니다.",rep:-25}
+      ]}
+    ]
+  },
+  {
+    title:"회의실이 비어 있습니다",
+    body:"아무도 없는 회의실.\n잠깐 낮잠을 잘 수 있을 것 같습니다.",
+    choices:[
+      {text:"회의실에서 잔다",results:[
+        {p:68,msg:"꿀잠에 성공했습니다.",hp:20},
+        {p:32,msg:"임원과 눈이 마주쳤습니다.",rep:-28}
+      ]},
+      {text:"자리로 돌아간다",results:[
+        {p:100,msg:"평범하게 업무를 계속합니다.",work:8,hp:-9}
+      ]}
+    ]
+  },
+  {
+    title:"회사 단체 채팅방",
+    body:"중요한 공지에 실수로 ㅋㅋㅋㅋㅋ를 보냈습니다.",
+    choices:[
+      {text:"재빨리 삭제한다",results:[
+        {p:60,msg:"아무도 못 봤습니다."},
+        {p:40,msg:"이미 모두가 봤습니다.",rep:-18}
+      ]},
+      {text:"그냥 둔다",results:[
+        {p:30,msg:"분위기가 좋아졌습니다.",rep:15},
+        {p:70,msg:"팀장이 개인 메시지를 보냈습니다.",rep:-25}
+      ]}
+    ]
+  },
+  {
+    title:"동료가 업무를 부탁합니다",
+    body:"동료: 이거 딱 5분만 도와줄 수 있어요?",
+    choices:[
+      {text:"도와준다",results:[
+        {p:75,msg:"동료가 감동했습니다.",rep:18,work:12,hp:-20},
+        {p:25,msg:"5분이라더니 두 시간이 지났습니다.",work:9,hp:-33}
+      ]},
+      {text:"바쁜 척한다",results:[
+        {p:60,msg:"다른 사람에게 부탁했습니다.",hp:5},
+        {p:40,msg:"모니터에 게임이 켜진 걸 들켰습니다.",rep:-25}
+      ]}
+    ]
+  }
+];
+
+function initial() {
+  return {
+    rank:0,day:1,hp:75,rep:65,work:0,
+    money:0,sns:0,ending:null,
+    endings:[],pending:[],logs:["중소기업 인턴으로 입사했습니다."]
+  };
+}
+
+let game;
+let paused=false;
+let cooldownUntil=0;
+let ticks=0;
+
+const $ = id=>document.getElementById(id);
+const clamp = n=>Math.max(0,Math.min(100,n));
+
+function save() {
+  try {localStorage.setItem(KEY,JSON.stringify(game));}
+  catch(e) {console.warn("저장 실패",e);}
+}
+
+function load() {
+  try {
+    game=JSON.parse(localStorage.getItem(KEY))||initial();
+    if(!Array.isArray(game.pending))game.pending=[];
+    if(!Array.isArray(game.endings))game.endings=[];
+    if(!Array.isArray(game.logs))game.logs=[];
+  } catch(e) {game=initial();}
+  render();
+}
+
+function result(title,text) {
+  $("resultTitle").textContent=title;
+  $("resultText").textContent=text;
+}
+
+function log(text) {
+  game.logs.unshift(text);
+  game.logs=game.logs.slice(0,30);
+}
+
+function render() {
+  $("rank").textContent="직급: "+RANKS[game.rank];
+  $("day").textContent="DAY "+game.day;
+  $("money").textContent=game.money.toLocaleString()+"원";
+
+  for(const [key,value] of [
+    ["hp",game.hp],["rep",game.rep],["work",game.work]
+  ]) {
+    $(key+"Text").textContent=Math.floor(value)+"/100";
+    $(key+"Bar").style.width=clamp(value)+"%";
+  }
+
+  const required=45+game.rank*6;
+  $("promotionInfo").textContent=
+    game.rank===9 ? "최종 승진 완료" :
+    "다음 직급: "+RANKS[game.rank+1]+
+    " / 필요 실적 "+required+" / 평판 30 이상";
+
+  $("promotionButton").disabled=
+    !!game.ending||paused||game.work<required||game.rep<30;
+
+  $("pendingCount").textContent="새 알림 "+game.pending.length;
+
+  document.querySelectorAll("#actionButtons button").forEach(b=>{
+    b.disabled=!!game.ending||paused||Date.now()<cooldownUntil;
+  });
+
+  $("cooldown").textContent=
+    Date.now()<cooldownUntil ?
+    "다음 월루까지 "+Math.ceil((cooldownUntil-Date.now())/1000)+"초" : "";
+
+  const container=$("messages");
+  container.replaceChildren();
+
+  [...game.pending].reverse().forEach(p=>{
+    const e=EVENTS[p.index];
+    if(!e)return;
+    const item=document.createElement("div");
+    item.className="message new";
+
+    const small=document.createElement("small");
+    small.textContent="● 새로운 사건 · DAY "+p.day;
+    const strong=document.createElement("strong");
+    strong.textContent=e.title;
+    const para=document.createElement("p");
+    para.textContent=e.body;
+    const button=document.createElement("button");
+    button.textContent="확인하고 선택하기 →";
+    button.onclick=()=>openEvent(p.id);
+
+    item.append(small,strong,para,button);
+    container.append(item);
+  });
+
+  game.logs.slice(0,20).forEach(message=>{
+    const item=document.createElement("div");
+    item.className="message";
+    const small=document.createElement("small");
+    small.textContent="사내 기록";
+    const p=document.createElement("p");
+    p.textContent=message;
+    item.append(small,p);
+    container.append(item);
+  });
+
+  save();
+}
+
+function modal(title,body,buttons,type="SYSTEM MESSAGE") {
+  paused=true;
+  $("modal").classList.add("show");
+  $("modalType").textContent=type;
+  $("modalTitle").textContent=title;
+  $("modalBody").textContent=body;
+  const wrap=$("modalButtons");
+  wrap.replaceChildren();
+
+  buttons.forEach(b=>{
+    const button=document.createElement("button");
+    button.textContent=b.text;
+    button.onclick=b.click;
+    wrap.appendChild(button);
+  });
+}
+
+function closeModal() {
+  $("modal").classList.remove("show");
+  paused=false;
+  render();
+}
+
+function endGame(id) {
+  if(game.ending)return;
+  game.ending=id;
+  if(!game.endings.includes(id))game.endings.push(id);
+  save();
+
+  const e=ENDINGS[id];
+  modal("ENDING — "+e[0],
+    e[1]+"\n\n엔딩 "+game.endings.length+"/5 수집",
+    [
+      {text:"새 인생 시작",click:()=>{
+        closeModal();restart();
+      }},
+      {text:"엔딩 도감",click:()=>{
+        closeModal();collection();
+      }}
+    ],"THE END");
+}
+
+function apply(d) {
+  game.hp=clamp(game.hp+(d.hp||0));
+  game.rep=clamp(game.rep+(d.rep||0));
+  game.work=clamp(game.work+(d.work||0));
+  game.sns+=(d.sns||0);
+
+  const message=d.msg||"별일 없이 지나갔습니다.";
+  log(message);
+  result("행동 결과",message);
+
+  if(game.hp<=0)endGame("dead");
+  else if(game.rep<=0)endGame("beggar");
+  else if(game.rep>=95&&game.work>=80&&game.rank>=3)
+    endGame("scout");
+
+  render();
+}
+
+function wolru(type) {
+  if(game.ending||paused||Date.now()<cooldownUntil)return;
+
+  const actions={
+    sleep:{name:"몰래 자기",hp:23,risk:.54,penalty:-36},
+    reels:{name:"릴스 보기",hp:12,risk:.43,penalty:-42},
+    coffee:{name:"탕비실 가기",hp:9,risk:.24,penalty:-18},
+    toilet:{name:"화장실 피신",hp:16,risk:.37,penalty:-27}
+  };
+
+  const a=actions[type];
+  cooldownUntil=Date.now()+18000;
+  const caught=Math.random()<Math.min(.85,a.risk+game.rank*.012);
+
+  if(caught) {
+    apply({
+      hp:-5,rep:a.penalty,
+      sns:type==="reels"?1:0,
+      msg:a.name+" 적발! 체력 -5 / 평판 "+a.penalty
+    });
+  } else {
+    apply({
+      hp:a.hp,
+      sns:type==="reels"?1:0,
+      msg:a.name+" 성공! 체력 +"+a.hp
+    });
+  }
+}
+
+function drawEvent() {
+  if(game.ending||game.pending.length>=3)return;
+  const index=Math.floor(Math.random()*EVENTS.length);
+  game.pending.push({
+    id:Date.now()+Math.random(),index:index,day:game.day
+  });
+  result("새로운 사내 알림",EVENTS[index].title);
+  render();
+}
+
+function chooseOutcome(outcomes) {
+  const r=Math.random()*100;
+  let sum=0;
+  for(const o of outcomes) {
+    sum+=o.p;
+    if(r<sum)return o;
+  }
+  return outcomes[outcomes.length-1];
+}
+
+function openEvent(id) {
+  if(game.ending||paused)return;
+  const pending=game.pending.find(p=>p.id===id);
+  if(!pending)return;
+  const e=EVENTS[pending.index];
+
+  modal(e.title,e.body,e.choices.map(c=>({
+    text:c.text,
+    click:()=>{
+      game.pending=game.pending.filter(p=>p.id!==id);
+      const outcome=chooseOutcome(c.results);
+      apply(outcome);
+      if(game.ending)return;
+      modal("선택 결과",outcome.msg,
+        [{text:"확인",click:closeModal}],"EVENT RESULT");
+    }
+  })),"사내 메신저");
+}
+
+function promote() {
+  if(game.ending||paused)return;
+  const needed=45+game.rank*6;
+  if(game.work<needed||game.rep<30)return;
+
+  if(Math.random()<.68) {
+    game.rank++;
+    game.work=0;
+    apply({rep:5,msg:"승진 성공! "+RANKS[game.rank]+"이(가) 되었습니다."});
+    if(game.rank===9&&!game.ending)endGame("chairman");
+  } else {
+    apply({
+      rep:-13,work:-20,
+      msg:"승진 누락! 다음 기회에 다시 도전하세요."
+    });
+  }
+}
+
+function restart() {
+  if(!confirm("새 인생을 시작할까요? 엔딩 도감은 유지됩니다."))return;
+  const oldEndings=[...game.endings];
+  game=initial();
+  game.endings=oldEndings;
+  cooldownUntil=0;
+  closeModal();
+  result("재입사","다시 인턴으로 시작합니다.");
+  render();
+}
+
+function collection() {
+  const lines=Object.entries(ENDINGS).map(([id,e],i)=>
+    (i+1)+". "+(game.endings.includes(id)?e[0]:"???")
+  );
+  modal("인생 도감",lines.join("\n"),
+    [{text:"돌아가기",click:closeModal}],"ENDING COLLECTION");
+}
+
+setInterval(()=>{
+  if(paused||game.ending)return;
+  ticks++;
+  game.hp=clamp(game.hp-.5);
+  game.work=clamp(game.work+.3);
+
+  if(ticks%10===0) {
+    game.day++;
+    game.money+=2500+game.rank*900;
+    log("월급 입금! 또 하루를 버텼습니다.");
+  }
+
+  if(game.hp<=0) {
+    endGame("dead");return;
+  }
+
+  if(ticks%30===0)drawEvent();
+  else render();
+},1000);
+
+load();
+if(game.ending) {
+  const previous=game.ending;
+  game.ending=null;
+  endGame(previous);
+} else {
+  result("첫 출근","오늘도 무사히 퇴근할 수 있을까요?");
+}
+</script>
+</body>
+</html>
