@@ -30,7 +30,7 @@ let g;try{g={...fresh(),...JSON.parse(localStorage.getItem(KEY))};}catch{g=fresh
 let modalOpen=false,until=0,scene='office',pose='normal',sceneEnd=0;
 function save(){try{localStorage.setItem(KEY,JSON.stringify(g))}catch{}}
 function note(t){g.logs.unshift(t);g.logs=g.logs.slice(0,35);g.last=t}
-function location(s,p='normal',ms=3200){scene=s;pose=p;sceneEnd=Date.now()+ms;paint()}
+function showScene(s,p='normal',ms=3200){scene=s;pose=p;sceneEnd=Date.now()+ms;paint()}
 function art(){
  const rect=(x,y,w,h,fill='#eee')=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}" stroke="#b7b7b7" stroke-width="1"/>`;
  let bg=rect(1,1,118,79,'#fff');
@@ -55,10 +55,10 @@ function dialog(kind,txt,buttons){modalOpen=true;$('dialogType').textContent=kin
 function close(){modalOpen=false;$('overlay').classList.add('hidden');paint()}
 function end(id){if(g.ending)return;g.ending=id;if(!g.endings.includes(id))g.endings.push(id);paint();const [title,body]=ENDINGS[id];dialog('THE END · '+title,body+'\n\n엔딩 '+g.endings.length+'/5 수집',[['새 인생 시작',()=>{close();newGame()}],['엔딩 도감',()=>{close();collection()}]])}
 function change(d,msg){for(const k of ['hp','rep','work'])g[k]=clamp(g[k]+(d[k]||0));g.sns+=(d.sns||0);note(msg);if(g.hp<=0)return end('dead');if(g.rep<=0)return end('beggar');if(g.rep>=95&&g.work>=80&&g.rank>=3)return end('scout');if(g.sns>=8&&Math.random()<.15)return end('influencer');paint()}
-function wolru(type){if(g.ending||modalOpen||Date.now()<until)return;const a={sleep:['몰래 자기',23,.54,-36,'office','sleep'],reels:['릴스 보기',12,.43,-42,'office','phone'],pantry:['탕비실',9,.24,-18,'pantry','normal'],toilet:['화장실',16,.37,-27,'toilet','normal']}[type];until=Date.now()+18000;const caught=Math.random()<Math.min(.85,a[2]+g.rank*.012);location(a[4],caught?'caught':a[5]);change(caught?{hp:-5,rep:a[3],sns:type==='reels'?1:0}:{hp:a[1],sns:type==='reels'?1:0},a[0]+(caught?' 적발! 체력 -5 / 평판 '+a[3]:' 성공! 체력 +'+a[1]))}
+function wolru(type){if(g.ending||modalOpen||Date.now()<until)return;const a={sleep:['몰래 자기',23,.54,-36,'office','sleep'],reels:['릴스 보기',12,.43,-42,'office','phone'],pantry:['탕비실',9,.24,-18,'pantry','normal'],toilet:['화장실',16,.37,-27,'toilet','normal']}[type];until=Date.now()+18000;const caught=Math.random()<Math.min(.85,a[2]+g.rank*.012);showScene(a[4],caught?'caught':a[5]);change(caught?{hp:-5,rep:a[3],sns:type==='reels'?1:0}:{hp:a[1],sns:type==='reels'?1:0},a[0]+(caught?' 적발! 체력 -5 / 평판 '+a[3]:' 성공! 체력 +'+a[1]))}
 function draw(){if(g.pending.length>=3||g.ending)return;g.pending.push({id:Date.now()+Math.random(),day:g.day,index:Math.floor(Math.random()*E.length)});paint()}
 function sample(outcomes){let r=Math.random()*100;for(const o of outcomes){r-=o[0];if(r<0)return o}return outcomes[outcomes.length-1]}
-function openEvent(id){if(modalOpen||g.ending)return;const p=g.pending.find(p=>p.id===id);if(!p)return;const e=E[p.index];location(e[2]);dialog('사내 메신저 · '+e[0],e[1],e[3].map(c=>[c[0],()=>{g.pending=g.pending.filter(x=>x.id!==id);const o=sample(c[1]);close();location(e[2],o[2].rep<0?'caught':'normal');change(o[2],o[1]);if(!g.ending)dialog('선택 결과',o[1],[['확인',close]])}]))}
+function openEvent(id){if(modalOpen||g.ending)return;const p=g.pending.find(p=>p.id===id);if(!p)return;const e=E[p.index];showScene(e[2]);dialog('사내 메신저 · '+e[0],e[1],e[3].map(c=>[c[0],()=>{g.pending=g.pending.filter(x=>x.id!==id);const o=sample(c[1]);close();showScene(e[2],o[2].rep<0?'caught':'normal');change(o[2],o[1]);if(!g.ending)dialog('선택 결과',o[1],[['확인',close]])}]))}
 function promote(){if(g.ending||modalOpen||g.work<45+g.rank*6||g.rep<30)return;if(Math.random()<.68){g.rank++;g.work=0;change({rep:5},'승진 성공! '+RANKS[g.rank]+'이(가) 되었습니다.');if(g.rank===9&&!g.ending)end('chairman')}else change({rep:-13,work:-20},'승진 누락! 다음 기회에 도전하세요.')}
 function collection(){dialog('엔딩 도감',Object.entries(ENDINGS).map(([id,e],i)=>(i+1)+'. '+(g.endings.includes(id)?e[0]:'???')).join('\n'),[['돌아가기',close]])}
 function newGame(){if(!confirm('새 인생을 시작할까요? 엔딩 도감은 유지됩니다.'))return;g=fresh(g.endings.slice());g.started=true;scene='office';pose='normal';until=0;close();paint()}
