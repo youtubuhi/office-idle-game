@@ -45,6 +45,14 @@ let hasSavedRun=false;let g;try{
 g.stats={...fresh().stats,...(g.stats||{})};
 for(const k of ['pending','future','logs','endings','items','visits'])if(!Array.isArray(g[k]))g[k]=[];
 if(!Array.isArray(g.actionIds)||g.actionIds.length!==4)g.actionIds=fresh().actionIds;
+// 이전 버전에서 대기 중이던 이벤트도 생성 내역을 기록합니다. 최초 한 번만 실행됩니다.
+if(!g.eventArrivalLogVersion){
+  for(const p of [...g.pending].reverse()){
+    const e=EV.find(x=>x.id===p.key)||FOLLOW[p.key];
+    if(e)g.logs.unshift({type:'event-arrival',name:e.name,body:e.body,day:p.day});
+  }
+  g.logs=g.logs.slice(0,35);g.eventArrivalLogVersion=1;
+}
 // 이전 저장에서 이미 대기 중이던 직급 불일치 인사 이벤트도 정리합니다.
 g.pending=g.pending.filter(p=>{const e=EV.find(x=>x.id===p.key);return !e||!Number.isFinite(e.minRank)||g.rank>=e.minRank});
 if(!Number.isFinite(g.nextNormalAt)||g.nextNormalAt<=0||g.nextNormalAt>g.ticks+80)g.nextNormalAt=g.ticks+50+Math.floor(Math.random()*31);
@@ -103,7 +111,12 @@ function paint(){if(showWelcome){$('welcome').classList.remove('hidden');$('app'
 const actionHost=$('actions');
 while(actionHost.children.length<4){const b=document.createElement('button');b.type='button';b.onclick=()=>startAction(b.dataset.actionId);actionHost.append(b)}
 for(let i=0;i<4;i++){const b=actionHost.children[i],id=g.actionIds[i],a=ACTS.find(x=>x.id===id);if(!a){b.hidden=true;continue}b.hidden=false;if(b.dataset.actionId!==id){b.dataset.actionId=id;b.innerHTML=`${a.name}<small>성공 시 체력 +${a.hp}${a.work?` · 실적 +${a.work}`:''} · ${a.time}초</small>`}b.disabled=!!g.ending||modalOpen||!!g.active;}$('workButton').disabled=!!g.ending||modalOpen||!!g.active;$('workButton').innerHTML=workLabel()+'<small style="display:block;color:#777">실적 +12 · 평판 +6 · 체력 -10 · 6초</small>';$('actionStatus').textContent=g.active?'· '+g.active.label+' '+Math.max(0,Math.ceil((g.active.ends-Date.now())/1000))+'초 남음':'';const need=34+g.rank*5;const dayNeed=3+g.rank*3;$('promotionInfo').textContent='다음: '+(RANKS[g.rank+1]||'회장')+' · 실적 '+Math.floor(g.work)+'/'+need+' · DAY '+g.day+'/'+dayNeed;$('promote').disabled=!!g.ending||modalOpen||g.rank>=9||g.work<need||g.day<dayNeed;
-$('count').textContent='새 알림 '+g.pending.length;const m=$('messages');const messageSignature=JSON.stringify([g.pending,g.logs.slice(0,14)]);if(m.dataset.signature!==messageSignature){m.dataset.signature=messageSignature;m.replaceChildren();for(const p of [...g.pending].reverse()){const e=findEvent(p.key);if(!e)continue;const el=document.createElement('div');el.className='message new';const small=document.createElement('small');small.textContent='● 새 이벤트 · DAY '+p.day;const title=document.createElement('div');title.textContent=e.name;const btn=document.createElement('button');btn.textContent='확인하기';btn.onclick=()=>openEvent(p.id);el.append(small,title,btn);m.append(el)}for(const entry of g.logs.slice(0,14)){const el=document.createElement('div');el.className='message';if(entry&&typeof entry==='object'&&entry.type==='event'){el.classList.add('eventLog');const picked=document.createElement('div');picked.className='picked';picked.textContent=entry.action;const outcome=document.createElement('div');outcome.className='outcome';outcome.textContent=entry.result;const change=document.createElement('div');change.className='change';change.textContent=entry.delta;el.append(picked,outcome,change)}else el.textContent=String(entry);m.append(el)}}save()}
+$('count').textContent='새 알림 '+g.pending.length;const m=$('messages');const messageSignature=JSON.stringify([g.pending,g.logs.slice(0,14)]);if(m.dataset.signature!==messageSignature){m.dataset.signature=messageSignature;m.replaceChildren();for(const p of [...g.pending].reverse()){const e=findEvent(p.key);if(!e)continue;const el=document.createElement('div');el.className='message new';const small=document.createElement('small');small.textContent='● 새 이벤트 · DAY '+p.day;const title=document.createElement('div');title.textContent=e.name;const btn=document.createElement('button');btn.textContent='확인하기';btn.onclick=()=>openEvent(p.id);el.append(small,title,btn);m.append(el)}for(const entry of g.logs.slice(0,14)){const el=document.createElement('div');el.className='message';if(entry&&typeof entry==='object'&&entry.type==='event'){el.classList.add('eventLog');const picked=document.createElement('div');picked.className='picked';picked.textContent=entry.action;const outcome=document.createElement('div');outcome.className='outcome';outcome.textContent=entry.result;const change=document.createElement('div');change.className='change';change.textContent=entry.delta;el.append(picked,outcome,change)}else if(entry&&typeof entry==='object'&&entry.type==='event-arrival'){
+  const small=document.createElement('small');small.textContent='이벤트 발생 · DAY '+entry.day;
+  const title=document.createElement('div');title.style.fontWeight='600';title.textContent=entry.name;
+  const body=document.createElement('p');body.textContent=entry.body;
+  el.append(small,title,body);
+}else el.textContent=String(entry);m.append(el)}}save()}
 function dialog(kind,text,buttons,delta=''){modalOpen=true;$('dialogType').textContent=kind;$('dialogText').textContent=text;$('dialogDelta').textContent=delta;$('dialogDelta').classList.toggle('hidden',!delta);$('choices').replaceChildren();for(const [label,fn] of buttons){const b=document.createElement('button');b.textContent=label;b.onclick=fn;$('choices').append(b)}$('overlay').classList.remove('hidden')}
 function close(){modalOpen=false;$('overlay').classList.add('hidden');paint()}
 function end(id){if(g.ending)return;g.ending=id;g.active=null;if(!g.endings.includes(id))g.endings.push(id);save();const e=ENDS[id];const review=reviewText();dialog('THE END · '+e[0],e[1]+'\n\n'+review+'\n\n엔딩 '+g.endings.length+'/'+Object.keys(ENDS).length+' 수집',[['새 인생 시작',()=>{close();newGame()}],['엔딩 도감',()=>{close();collection()}]])}
@@ -112,7 +125,10 @@ function formatDelta(before){const dif=[['체력','hp'],['평판','rep'],['실�
 function apply(d,msg,log=true){const before={hp:g.hp,rep:g.rep,work:g.work,money:g.money};for(const k of ['hp','rep','work'])g[k]=cap(g[k]+(d[k]||0));g.money=Math.max(0,g.money+(d.money||0));g.stats.peakRep=Math.max(g.stats.peakRep,g.rep);g.stats.lowHp=Math.min(g.stats.lowHp,g.hp);g.sns+=(d.sns||0);g.bossFavor=Math.max(0,g.bossFavor+(d.bossFavor||0));if(g.hp>0)g.lowSince=null;if(log)note(msg);const delta=formatDelta(before);if(g.rep<=0)end('beggar');else if(g.hp<=0&&!g.lowSince)g.lowSince=Date.now();else if(g.bossFavor>=6&&g.rank>=6&&Math.random()<.12)end('legend');else if(g.sns>=7&&Math.random()<.12)end('influencer');else if(g.rep>=98&&g.work>=95&&g.rank>=4)end('scout');paint();return delta}
 function choose(results){let r=Math.random()*100;for(const o of results){r-=o[0];if(r<0)return o}return results[results.length-1]}
 function findEvent(key){return EV.find(e=>e.id===key)||FOLLOW[key]}
-function queue(key,delay=0){if(delay){g.future.push({key,at:g.ticks+delay});return}if(g.pending.length>=3)return;g.pending.push({id:Date.now()+Math.random(),key,day:g.day})}
+function queue(key,delay=0){if(delay){g.future.push({key,at:g.ticks+delay});return}if(g.pending.length>=3)return;g.pending.push({id:Date.now()+Math.random(),key,day:g.day});
+const e=findEvent(key);
+if(e){g.logs.unshift({type:'event-arrival',name:e.name,body:e.body,day:g.day});g.logs=g.logs.slice(0,35)}
+}
 function openEvent(id){if(modalOpen||g.ending)return;const p=g.pending.find(x=>x.id===id);if(!p)return;const e=findEvent(p.key);if(!e)return;sceneSet(e.scene||'office');dialog('사내 메신저 · '+e.name,e.body,e.options.map(option=>[option[0],()=>{g.pending=g.pending.filter(x=>x.id!==id);const out=choose(option[1]);close();sceneSet(e.scene||'office',out[2].rep<0?'caught':'normal');
 // 직접 업무를 수행해 실적을 얻었다면 평판 보상과 체력 소모를 동반합니다.
 // 공 가로채기·AI 위임 등 부정행위, 단순 행운 및 사적인 이벤트는 예외입니다.
